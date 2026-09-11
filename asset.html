@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NEO OS</title>
+  <style>
+    html,body{width:100%;height:100%;margin:0;background:#050505;color:#fff;font:16px Arial,sans-serif}
+    body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+    #status{text-align:center;opacity:.8}
+    #fallback-link{display:none;padding:12px 28px;background:#fff;color:#050505;border-radius:999px;font-weight:700;text-decoration:none;font-size:15px}
+  </style>
+</head>
+<body>
+  <div id="status">Loading NEO OS…</div>
+  <a id="fallback-link" href="#">Open NEO OS</a>
+
+  <script>
+  (function () {
+    "use strict";
+
+    var REPO  = "gh/unblockedgames99x-code/neo-os-core-cdn@38f9f14ffb8d9e6467e04bb55f0a61ab8dbb3703/";
+    var HOSTS = ["fastly.jsdelivr.net","cdn.jsdelivr.net","gcore.jsdelivr.net","quantil.jsdelivr.net"];
+    var roots = HOSTS.map(function(h){ return "https://"+h+"/"+REPO; });
+
+    var statusEl = document.getElementById("status");
+    var linkEl   = document.getElementById("fallback-link");
+
+    /* ── Strategy 1: fetch → document.write (real browser / Safari file://) ── */
+    function install(html, root) {
+      html = html.replace(/<meta\b[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi,"");
+      var inj = '<base href="'+root.replace(/&/g,"&amp;").replace(/"/g,"&quot;")+'">'
+              + '<meta name="neo-runner" content="github-jsdelivr">';
+      html = /<head(?:\s[^>]*)?>/i.test(html)
+        ? html.replace(/<head(?:\s[^>]*)?>/i, function(m){ return m+inj; })
+        : inj+html;
+      document.open(); document.write(html); document.close();
+    }
+
+    function tryFetch(index) {
+      if (index >= roots.length) {
+        /* ── Strategy 2: all fetches failed → navigate directly ── */
+        tryNavigate(0);
+        return;
+      }
+      fetch(roots[index]+"index.html", {cache:"no-store",credentials:"omit"})
+        .then(function(r){ if(!r.ok) throw 0; return r.text(); })
+        .then(function(html){ install(html, roots[index]); })
+        .catch(function(){ tryFetch(index+1); });
+    }
+
+    /* ── Strategy 2: window.location redirect (escapes sandboxed viewers) ── */
+    function tryNavigate(index) {
+      if (index >= roots.length) {
+        /* ── Strategy 3: manual link for fully locked-down environments ── */
+        statusEl.textContent = "Tap the button below to open NEO OS.";
+        linkEl.href  = roots[0]+"index.html";
+        linkEl.style.display = "inline-block";
+        return;
+      }
+      /* Ping via Image to check reachability before navigating */
+      var probe = new Image();
+      var timer = setTimeout(function(){ probe.src=""; tryNavigate(index+1); }, 3000);
+      probe.onload = function(){
+        clearTimeout(timer);
+        window.location.replace(roots[index]+"index.html");
+      };
+      probe.onerror = function(){
+        clearTimeout(timer);
+        tryNavigate(index+1);
+      };
+      probe.src = roots[index]+"assets/neo-logo.png?_="+Date.now();
+    }
+
+    tryFetch(0);
+  })();
+  </script>
+</body>
+</html>
